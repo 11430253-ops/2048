@@ -3,20 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>2048 Pro: 5x5 X-Wildcard Edition</title>
+    <title>2048 Pro: 5x5 X-Yellow Edition</title>
     <style>
         :root {
             --bg-color: #bbada0;
             --tile-bg: #cdc1b4;
             --text-dark: #776e65;
             --text-light: #f9f6f2;
-            --wildcard-color: #e74c3c; /* 更換為醒目的紅色調 */
+            --wildcard-color: #ffeb3b; /* 亮黃色 */
         }
         body {
             background-color: #faf8ef;
-            font-family: "Clear Sans", "Helvetica Neue", Arial, sans-serif;
+            font-family: "Clear Sans", Arial, sans-serif;
             display: flex; flex-direction: column; align-items: center; justify-content: center;
-            height: 100vh; margin: 0; touch-action: none;
+            height: 100vh; margin: 0; touch-action: none; overflow: hidden;
         }
         .header { width: 90vw; max-width: 450px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
         .score-container { background: var(--bg-color); padding: 5px 15px; border-radius: 6px; color: white; text-align: center; }
@@ -37,11 +37,11 @@
         .tile[data-val="32"] { background: #f67c5f; color: var(--text-light); }
         .tile[data-val="64"] { background: #f65e3b; color: var(--text-light); }
         .tile[data-val="X"] { 
-            background: var(--wildcard-color); color: white; 
-            box-shadow: 0 0 10px rgba(231, 76, 60, 0.6); animation: pulse 1.5s infinite;
+            background: var(--wildcard-color); color: #333; 
+            box-shadow: 0 0 15px rgba(255, 235, 59, 0.8); animation: pulse 1.5s infinite;
         }
         @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.05); } 100% { transform: scale(1); } }
-        .instructions { margin-top: 15px; color: var(--text-dark); text-align: center; font-size: 0.9em; }
+        .status-bar { margin-top: 10px; font-weight: bold; color: #e74c3c; }
     </style>
 </head>
 <body>
@@ -53,31 +53,48 @@
         </div>
     </div>
     <div id="game-container"></div>
-    <div class="instructions">
-        滑動移動 | 每 8 次移動出現 <b>萬用方塊(X)</b><br>
-        2 與 4 隨機出現 | 無效滑動不新增方塊
-    </div>
+    <div id="idle-warning" class="status-bar"></div>
     <script>
         class Game2048 {
             constructor(size = 5) {
                 this.size = size;
-                this.grid = Array(size).fill().map(() => Array(size).fill(0));
+                this.grid = [];
                 this.score = 0;
                 this.moveCount = 0;
+                this.isGameActive = true;
+                this.hasWon = false;
+                this.idleTimer = null;
                 this.container = document.getElementById('game-container');
                 this.scoreDisplay = document.getElementById('score');
+                this.warningDisplay = document.getElementById('idle-warning');
                 this.initGame();
             }
+
             initGame() {
+                this.grid = Array(this.size).fill().map(() => Array(this.size).fill(0));
+                this.score = 0;
+                this.moveCount = 0;
+                this.isGameActive = true;
+                this.hasWon = false;
                 this.addTile(); this.addTile();
                 this.render();
+                this.resetIdleTimer();
             }
+
+            resetIdleTimer() {
+                clearTimeout(this.idleTimer);
+                this.warningDisplay.innerText = "";
+                this.idleTimer = setTimeout(() => {
+                    alert("10秒未操作，遊戲自動重新開始");
+                    this.initGame();
+                }, 10000);
+            }
+
             addTile() {
                 let empty = [];
                 for(let r=0; r<this.size; r++) for(let c=0; c<this.size; c++) if(this.grid[r][c]===0) empty.push({r,c});
                 if(empty.length) {
                     let {r,c} = empty[Math.floor(Math.random()*empty.length)];
-                    // 修改：每 8 步產出 X，且 2, 4 隨機均等出現
                     if (this.moveCount > 0 && this.moveCount % 8 === 0) {
                         this.grid[r][c] = 'X';
                         this.moveCount = 0;
@@ -86,6 +103,7 @@
                     }
                 }
             }
+
             render() {
                 this.container.innerHTML = '';
                 this.scoreDisplay.innerText = this.score;
@@ -96,28 +114,26 @@
                     this.container.appendChild(t);
                 }));
             }
-            move(dir) {
-                let changed = false;
-                // 暫存移動前的狀態用以比對
-                let previousGrid = JSON.stringify(this.grid);
 
+            move(dir) {
+                if (!this.isGameActive) return;
+                this.resetIdleTimer();
+                
+                let previousGrid = JSON.stringify(this.grid);
                 for(let i=0; i<this.size; i++) {
                     let line = this.getLine(i, dir);
                     let merged = this.merge(line);
                     this.setLine(i, dir, merged);
                 }
 
-                // 判斷畫面是否有變動
                 if(JSON.stringify(this.grid) !== previousGrid) {
-                    changed = true;
-                }
-
-                if(changed) { 
-                    this.moveCount++; // 只有有效移動才計數
-                    this.addTile(); 
-                    this.render(); 
+                    this.moveCount++;
+                    this.addTile();
+                    this.render();
+                    this.checkGameState();
                 }
             }
+
             getLine(idx, dir) {
                 let l = [];
                 for(let j=0; j<this.size; j++) {
@@ -128,6 +144,7 @@
                 }
                 return l;
             }
+
             setLine(idx, dir, m) {
                 for(let j=0; j<this.size; j++) {
                     let v = m[j] || 0;
@@ -137,11 +154,11 @@
                     else if(dir==='RIGHT') this.grid[idx][this.size-1-j] = v;
                 }
             }
+
             merge(l) {
                 let n = l.filter(v=>v!==0), res = [];
                 for(let i=0; i<n.length; i++) {
                     if(i<n.length-1) {
-                        // 修改：判斷 X 與數字的結合
                         if((n[i]==='X' && typeof n[i+1]==='number') || (n[i+1]==='X' && typeof n[i]==='number') || (n[i]===n[i+1] && n[i]!=='X')) {
                             let val = (n[i]==='X'?n[i+1]:n[i]) * 2;
                             res.push(val); this.score += val; i++; continue;
@@ -151,7 +168,35 @@
                 }
                 return res;
             }
+
+            checkGameState() {
+                let max = 0;
+                let canMove = false;
+
+                for(let r=0; r<this.size; r++) {
+                    for(let c=0; c<this.size; c++) {
+                        if (typeof this.grid[r][c] === 'number') max = Math.max(max, this.grid[r][c]);
+                        if (this.grid[r][c] === 0) canMove = true;
+                        // 檢查水平/垂直合併可能
+                        if (c < this.size - 1 && (this.grid[r][c] === this.grid[r][c+1] || this.grid[r][c] === 'X' || this.grid[r][c+1] === 'X')) canMove = true;
+                        if (r < this.size - 1 && (this.grid[r][c] === this.grid[r+1][c] || this.grid[r][c] === 'X' || this.grid[r+1][c] === 'X')) canMove = true;
+                    }
+                }
+
+                if (max >= 2048 && !this.hasWon) {
+                    this.hasWon = true;
+                    if (confirm("達成 2048！要繼續遊玩嗎？ (取消則重來)")) {} 
+                    else { this.initGame(); }
+                }
+
+                if (!canMove) {
+                    this.isGameActive = false;
+                    clearTimeout(this.idleTimer);
+                    if (confirm("無法繼續移動！要重來嗎？")) { this.initGame(); }
+                }
+            }
         }
+
         const g = new Game2048();
         window.addEventListener('keydown', e => { if(e.key.includes('Arrow')) g.move(e.key.replace('Arrow','').toUpperCase()); });
         let tx, ty;
