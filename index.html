@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>2048 Pro: 5x5 X-Wildcard Edition</title>
+    <style>
+        :root {
+            --bg-color: #bbada0;
+            --tile-bg: #cdc1b4;
+            --text-dark: #776e65;
+            --text-light: #f9f6f2;
+            --wildcard-color: #e74c3c; /* 更換為醒目的紅色調 */
+        }
+        body {
+            background-color: #faf8ef;
+            font-family: "Clear Sans", "Helvetica Neue", Arial, sans-serif;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            height: 100vh; margin: 0; touch-action: none;
+        }
+        .header { width: 90vw; max-width: 450px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .score-container { background: var(--bg-color); padding: 5px 15px; border-radius: 6px; color: white; text-align: center; }
+        #game-container {
+            position: relative; width: 90vw; height: 90vw; max-width: 450px; max-height: 450px;
+            background: var(--bg-color); border-radius: 6px; padding: 10px; box-sizing: border-box;
+            display: grid; grid-template-columns: repeat(5, 1fr); grid-template-rows: repeat(5, 1fr); gap: 8px;
+        }
+        .tile {
+            width: 100%; height: 100%; background: var(--tile-bg); border-radius: 3px;
+            display: flex; justify-content: center; align-items: center;
+            font-size: 20px; font-weight: bold; color: var(--text-dark);
+        }
+        .tile[data-val="2"] { background: #eee4da; }
+        .tile[data-val="4"] { background: #ede0c8; }
+        .tile[data-val="8"] { background: #f2b179; color: var(--text-light); }
+        .tile[data-val="16"] { background: #f59563; color: var(--text-light); }
+        .tile[data-val="32"] { background: #f67c5f; color: var(--text-light); }
+        .tile[data-val="64"] { background: #f65e3b; color: var(--text-light); }
+        .tile[data-val="X"] { 
+            background: var(--wildcard-color); color: white; 
+            box-shadow: 0 0 10px rgba(231, 76, 60, 0.6); animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.05); } 100% { transform: scale(1); } }
+        .instructions { margin-top: 15px; color: var(--text-dark); text-align: center; font-size: 0.9em; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1 style="margin:0">2048 <small>5x5</small></h1>
+        <div class="score-container">
+            <div style="font-size:12px">SCORE</div>
+            <div id="score" style="font-size:20px; font-weight:bold">0</div>
+        </div>
+    </div>
+    <div id="game-container"></div>
+    <div class="instructions">
+        滑動移動 | 每 8 次移動出現 <b>萬用方塊(X)</b><br>
+        2 與 4 隨機出現 | 無效滑動不新增方塊
+    </div>
+    <script>
+        class Game2048 {
+            constructor(size = 5) {
+                this.size = size;
+                this.grid = Array(size).fill().map(() => Array(size).fill(0));
+                this.score = 0;
+                this.moveCount = 0;
+                this.container = document.getElementById('game-container');
+                this.scoreDisplay = document.getElementById('score');
+                this.initGame();
+            }
+            initGame() {
+                this.addTile(); this.addTile();
+                this.render();
+            }
+            addTile() {
+                let empty = [];
+                for(let r=0; r<this.size; r++) for(let c=0; c<this.size; c++) if(this.grid[r][c]===0) empty.push({r,c});
+                if(empty.length) {
+                    let {r,c} = empty[Math.floor(Math.random()*empty.length)];
+                    // 修改：每 8 步產出 X，且 2, 4 隨機均等出現
+                    if (this.moveCount > 0 && this.moveCount % 8 === 0) {
+                        this.grid[r][c] = 'X';
+                        this.moveCount = 0;
+                    } else {
+                        this.grid[r][c] = Math.random() < 0.5 ? 2 : 4;
+                    }
+                }
+            }
+            render() {
+                this.container.innerHTML = '';
+                this.scoreDisplay.innerText = this.score;
+                this.grid.forEach(row => row.forEach(val => {
+                    const t = document.createElement('div');
+                    t.className = 'tile';
+                    if(val) { t.innerText = val; t.setAttribute('data-val', val); }
+                    this.container.appendChild(t);
+                }));
+            }
+            move(dir) {
+                let changed = false;
+                // 暫存移動前的狀態用以比對
+                let previousGrid = JSON.stringify(this.grid);
+
+                for(let i=0; i<this.size; i++) {
+                    let line = this.getLine(i, dir);
+                    let merged = this.merge(line);
+                    this.setLine(i, dir, merged);
+                }
+
+                // 判斷畫面是否有變動
+                if(JSON.stringify(this.grid) !== previousGrid) {
+                    changed = true;
+                }
+
+                if(changed) { 
+                    this.moveCount++; // 只有有效移動才計數
+                    this.addTile(); 
+                    this.render(); 
+                }
+            }
+            getLine(idx, dir) {
+                let l = [];
+                for(let j=0; j<this.size; j++) {
+                    if(dir==='UP') l.push(this.grid[j][idx]);
+                    else if(dir==='DOWN') l.push(this.grid[this.size-1-j][idx]);
+                    else if(dir==='LEFT') l.push(this.grid[idx][j]);
+                    else if(dir==='RIGHT') l.push(this.grid[idx][this.size-1-j]);
+                }
+                return l;
+            }
+            setLine(idx, dir, m) {
+                for(let j=0; j<this.size; j++) {
+                    let v = m[j] || 0;
+                    if(dir==='UP') this.grid[j][idx] = v;
+                    else if(dir==='DOWN') this.grid[this.size-1-j][idx] = v;
+                    else if(dir==='LEFT') this.grid[idx][j] = v;
+                    else if(dir==='RIGHT') this.grid[idx][this.size-1-j] = v;
+                }
+            }
+            merge(l) {
+                let n = l.filter(v=>v!==0), res = [];
+                for(let i=0; i<n.length; i++) {
+                    if(i<n.length-1) {
+                        // 修改：判斷 X 與數字的結合
+                        if((n[i]==='X' && typeof n[i+1]==='number') || (n[i+1]==='X' && typeof n[i]==='number') || (n[i]===n[i+1] && n[i]!=='X')) {
+                            let val = (n[i]==='X'?n[i+1]:n[i]) * 2;
+                            res.push(val); this.score += val; i++; continue;
+                        }
+                    }
+                    res.push(n[i]);
+                }
+                return res;
+            }
+        }
+        const g = new Game2048();
+        window.addEventListener('keydown', e => { if(e.key.includes('Arrow')) g.move(e.key.replace('Arrow','').toUpperCase()); });
+        let tx, ty;
+        window.addEventListener('touchstart', e => { tx=e.touches[0].clientX; ty=e.touches[0].clientY; });
+        window.addEventListener('touchend', e => {
+            let dx = e.changedTouches[0].clientX-tx, dy = e.changedTouches[0].clientY-ty;
+            if(Math.abs(dx)>30 || Math.abs(dy)>30) {
+                if(Math.abs(dx)>Math.abs(dy)) g.move(dx>0?'RIGHT':'LEFT');
+                else g.move(dy>0?'DOWN':'UP');
+            }
+        });
+    </script>
+</body>
+</html>
