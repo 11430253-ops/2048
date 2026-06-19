@@ -3,14 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>2048 Pro: 5x5 X-Yellow Edition</title>
+    <title>2048 Python 新手友善版</title>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/brython/3.12.4/brython.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/brython/3.12.4/brython_stdlib.js"></script>
+
     <style>
         :root {
             --bg-color: #bbada0;
             --tile-bg: #cdc1b4;
             --text-dark: #776e65;
             --text-light: #f9f6f2;
-            --wildcard-color: #ffeb3b; /* 亮黃色 */
+            --wildcard-color: #ffeb3b; /* 萬能方塊 X 的顏色：亮黃色 */
         }
         body {
             background-color: #faf8ef;
@@ -41,173 +45,247 @@
             box-shadow: 0 0 15px rgba(255, 235, 59, 0.8); animation: pulse 1.5s infinite;
         }
         @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.05); } 100% { transform: scale(1); } }
-        .status-bar { margin-top: 10px; font-weight: bold; color: #e74c3c; }
     </style>
 </head>
-<body>
-    <div class="header">
-        <h1 style="margin:0">2048 <small>5x5</small></h1>
+<body onload="brython()"> <div class="header">
+        <h1 style="margin:0">2048 <small>Python 5x5</small></h1>
         <div class="score-container">
             <div style="font-size:12px">SCORE</div>
             <div id="score" style="font-size:20px; font-weight:bold">0</div>
         </div>
     </div>
+
     <div id="game-container"></div>
-    <div id="idle-warning" class="status-bar"></div>
-    <script>
-        class Game2048 {
-            constructor(size = 5) {
-                this.size = size;
-                this.grid = [];
-                this.score = 0;
-                this.moveCount = 0;
-                this.isGameActive = true;
-                this.hasWon = false;
-                this.idleTimer = null;
-                this.container = document.getElementById('game-container');
-                this.scoreDisplay = document.getElementById('score');
-                this.warningDisplay = document.getElementById('idle-warning');
-                this.initGame();
-            }
 
-            initGame() {
-                this.grid = Array(this.size).fill().map(() => Array(this.size).fill(0));
-                this.score = 0;
-                this.moveCount = 0;
-                this.isGameActive = true;
-                this.hasWon = false;
-                this.addTile(); this.addTile();
-                this.render();
-                this.resetIdleTimer();
-            }
+    <script type="text/python">
+        from browser import document, window, timer, html, alert, bind
+        import random
+        import copy
 
-            resetIdleTimer() {
-                clearTimeout(this.idleTimer);
-                this.warningDisplay.innerText = "";
-                this.idleTimer = setTimeout(() => {
-                    alert("10秒未操作，遊戲自動重新開始");
-                    this.initGame();
-                }, 10000);
-            }
+        # 這裡建立一個「遊戲機台」的藍圖
+        class Game2048:
+            def __init__(self):
+                # 這是機台剛插上電（初始化）時，會自動設定好的初始資料
+                self.size = 5 # 遊戲是 5x5 的大小
+                self.grid = [[0]*5 for _ in range(5)] # 用 list（清單）建立 5x5 的空格地圖
+                self.score = 0 # 剛開始分數是 0 分
+                self.move_count = 0 # 記錄完家滑動了幾次有效步數
+                self.is_game_active = True # 遊戲是否進行中（如果是 False 畫面就會凍結）
+                self.has_won = False # 記錄玩家是不是已經贏了（達到2048）
+                self.idle_timer_id = None # 用來管理 10 秒倒數計時器的變數
+                self.init_game() # 設定完後，直接呼叫下方的「開始遊戲」功能
 
-            addTile() {
-                let empty = [];
-                for(let r=0; r<this.size; r++) for(let c=0; c<this.size; c++) if(this.grid[r][c]===0) empty.push({r,c});
-                if(empty.length) {
-                    let {r,c} = empty[Math.floor(Math.random()*empty.length)];
-                    if (this.moveCount > 0 && this.moveCount % 8 === 0) {
-                        this.grid[r][c] = 'X';
-                        this.moveCount = 0;
-                    } else {
-                        this.grid[r][c] = Math.random() < 0.5 ? 2 : 4;
-                    }
-                }
-            }
+            def init_game(self):
+                # 這個功能負責把遊戲重設，回到最初的乾淨狀態
+                self.grid = [[0]*5 for _ in range(5)] # 地圖全部清空（變回 0）
+                self.score = 0 # 分數歸零
+                self.move_count = 0 # 步數歸零
+                self.is_game_active = True # 開啟遊戲控制
+                self.has_won = False # 重置輸贏狀態
+                self.add_tile() # 在畫面上隨機放第 1 個數字方塊
+                self.add_tile() # 在畫面上隨機放第 2 個數字方塊
+                self.render() # 把這些資料畫到網頁上讓玩家看到
+                self.reset_idle_timer() # 開始算 10 秒倒數
 
-            render() {
-                this.container.innerHTML = '';
-                this.scoreDisplay.innerText = this.score;
-                this.grid.forEach(row => row.forEach(val => {
-                    const t = document.createElement('div');
-                    t.className = 'tile';
-                    if(val) { t.innerText = val; t.setAttribute('data-val', val); }
-                    this.container.appendChild(t);
-                }));
-            }
-
-            move(dir) {
-                if (!this.isGameActive) return;
-                this.resetIdleTimer();
+            def reset_idle_timer(self):
+                # 這個功能負責處理「10秒沒動就自動重來」的防呆計時
+                if self.idle_timer_id:
+                    timer.clear_timeout(self.idle_timer_id) # 如果原本就在倒數，先把舊的取消掉，重新計算 10 秒
                 
-                let previousGrid = JSON.stringify(this.grid);
-                for(let i=0; i<this.size; i++) {
-                    let line = this.getLine(i, dir);
-                    let merged = this.merge(line);
-                    this.setLine(i, dir, merged);
-                }
+                # 時間到的時候，會自動執行下面這兩行小程式
+                def auto_restart():
+                    alert("10秒未操作，遊戲自動重新開始")
+                    self.init_game() # 幫玩家把遊戲重開
+                
+                # 讓瀏覽器設定一個 10000 毫秒（也就是 10 秒）的定時器
+                self.idle_timer_id = timer.set_timeout(auto_restart, 10000)
 
-                if(JSON.stringify(this.grid) !== previousGrid) {
-                    this.moveCount++;
-                    this.addTile();
-                    this.render();
-                    this.checkGameState();
-                }
-            }
+            def add_tile(self):
+                # 這個功能負責在有空位的地方，隨機塞入新方塊
+                empty = [] # 準備一個空列表，用來記錄地圖上哪裡是 0（空位）
+                
+                # 用 for 迴圈把 5x5 的每一個格子都檢查一遍
+                for r in range(self.size):
+                    for c in range(self.size):
+                        if self.grid[r][c] == 0:
+                            # 如果這格是空的，就用 dict（字典）把它的座標 {'r': 橫排, 'c': 直欄} 存起來
+                            empty.append({'r': r, 'c': c})
+                
+                # 如果有找到空位（empty 裡面有東西），才執行放方塊的動作
+                if empty:
+                    chosen = random.choice(empty) # 從所有空位中，隨機抽一個出來
+                    r = chosen['r'] # 拿到抽中空位的橫排位置
+                    c = chosen['c'] # 拿到抽中空位的直欄位置
+                    
+                    # 【滿足要求】：每移動 8 次，就塞一個亮黃色的萬能方塊 'X'
+                    if self.move_count > 0 and self.move_count % 8 == 0:
+                        self.grid[r][c] = 'X'
+                        self.move_count = 0 # 放完 X 之後，步數歸零重新計算
+                    else:
+                        # 【滿足要求】：其餘時候，用 random.choice 讓 2 或 4 各有 50% 機率隨機出現
+                        self.grid[r][c] = random.choice([2, 4])
 
-            getLine(idx, dir) {
-                let l = [];
-                for(let j=0; j<this.size; j++) {
-                    if(dir==='UP') l.push(this.grid[j][idx]);
-                    else if(dir==='DOWN') l.push(this.grid[this.size-1-j][idx]);
-                    else if(dir==='LEFT') l.push(this.grid[idx][j]);
-                    else if(dir==='RIGHT') l.push(this.grid[idx][this.size-1-j]);
-                }
-                return l;
-            }
+            def render(self):
+                # 這個功能負責把 Python 裡面的數字，同步畫到網頁前端画面上
+                container = document['game-container'] # 找到網頁上的遊戲大框框
+                container.clear() # 把舊的畫面圖案抹掉
+                document['score'].text = str(self.score) # 在網頁上顯示最新分數
+                
+                # 用兩層 for 迴圈把 5x5 矩陣裡的數字一個個畫出來
+                for r in range(self.size):
+                    for c in range(self.size):
+                        val = self.grid[r][c]
+                        t = html.DIV(Class='tile') # 建立一個網頁上的小方塊
+                        if val != 0:
+                            t.text = str(val) # 如果格子裡有數字或 X，就顯示出文字
+                            t.setAttribute('data-val', str(val)) # 讓 CSS 根據數字自動塗上對應的顏色
+                        container <= t # 把這個做好的小方塊塞進網頁大框框裡
 
-            setLine(idx, dir, m) {
-                for(let j=0; j<this.size; j++) {
-                    let v = m[j] || 0;
-                    if(dir==='UP') this.grid[j][idx] = v;
-                    else if(dir==='DOWN') this.grid[this.size-1-j][idx] = v;
-                    else if(dir==='LEFT') this.grid[idx][j] = v;
-                    else if(dir==='RIGHT') this.grid[idx][this.size-1-j] = v;
-                }
-            }
+            def move(self, direction):
+                # 這個功能負責處理玩家滑動時，方塊移位跟合併的主邏輯
+                if not self.is_game_active:
+                    return # 如果遊戲被凍結了，直接收工，按什麼都沒反應
+                self.reset_idle_timer() # 玩家只要有動，就重新計算新的 10 秒
+                
+                # 【滿足要求】：利用 copy.deepcopy 幫移動前的棋盤拍一張完全獨立的照片備份
+                prev_grid = copy.deepcopy(self.grid)
 
-            merge(l) {
-                let n = l.filter(v=>v!==0), res = [];
-                for(let i=0; i<n.length; i++) {
-                    if(i<n.length-1) {
-                        if((n[i]==='X' && typeof n[i+1]==='number') || (n[i+1]==='X' && typeof n[i]==='number') || (n[i]===n[i+1] && n[i]!=='X')) {
-                            let val = (n[i]==='X'?n[i+1]:n[i]) * 2;
-                            res.push(val); this.score += val; i++; continue;
-                        }
-                    }
-                    res.push(n[i]);
-                }
-                return res;
-            }
+                # 用 for 迴圈把 5 條線（行或列）依序抓出來做移動
+                for i in range(self.size):
+                    line = self.get_line(i, direction) # 根據方向，把那一排方塊拿出來
+                    merged = self.merge(line) # 呼叫下方的合併演算法，把數字疊加
+                    self.set_line(i, direction, merged) # 把合併好的新整排方塊放回地圖原位
 
-            checkGameState() {
-                let max = 0;
-                let canMove = false;
+                # 【滿足要求】：檢查滑動後的地圖，是不是跟拍照備份的舊地圖一模一樣？
+                if self.grid != prev_grid:
+                    # 如果不一樣，代表有方塊真的移動了（有效滑動）
+                    self.move_count += 1 # 步數加 1 步
+                    self.add_tile() # 允許長出新方塊
+                    self.render() # 重新畫網頁畫面
+                    self.check_game_state() # 檢查玩家是不是贏了或輸了
 
-                for(let r=0; r<this.size; r++) {
-                    for(let c=0; c<this.size; c++) {
-                        if (typeof this.grid[r][c] === 'number') max = Math.max(max, this.grid[r][c]);
-                        if (this.grid[r][c] === 0) canMove = true;
-                        // 檢查水平/垂直合併可能
-                        if (c < this.size - 1 && (this.grid[r][c] === this.grid[r][c+1] || this.grid[r][c] === 'X' || this.grid[r][c+1] === 'X')) canMove = true;
-                        if (r < this.size - 1 && (this.grid[r][c] === this.grid[r+1][c] || this.grid[r][c] === 'X' || this.grid[r+1][c] === 'X')) canMove = true;
-                    }
-                }
+            def get_line(self, idx, direction):
+                # 輔助功能：依據移動方向（上、下、左、右），把二維地圖拆出獨立的一整排 list
+                line = []
+                for j in range(self.size):
+                    if direction == 'UP': line.append(self.grid[j][idx])
+                    elif direction == 'DOWN': line.append(self.grid[4-j][idx])
+                    elif direction == 'LEFT': line.append(self.grid[idx][j])
+                    elif direction == 'RIGHT': line.append(self.grid[idx][4-j])
+                return line
 
-                if (max >= 2048 && !this.hasWon) {
-                    this.hasWon = true;
-                    if (confirm("達成 2048！要繼續遊玩嗎？ (取消則重來)")) {} 
-                    else { this.initGame(); }
-                }
+            def set_line(self, idx, direction, merged):
+                # 輔助功能：把合併好的一整排數字，塞回二維地圖的對應位置
+                for j in range(self.size):
+                    val = merged[j] if j < len(merged) else 0 # 後面沒數字的空格自動補 0
+                    if direction == 'UP': self.grid[j][idx] = val
+                    elif direction == 'DOWN': self.grid[4-j][idx] = val
+                    elif direction == 'LEFT': self.grid[idx][j] = val
+                    elif direction == 'RIGHT': self.grid[idx][4-j] = val
 
-                if (!canMove) {
-                    this.isGameActive = false;
-                    clearTimeout(this.idleTimer);
-                    if (confirm("無法繼續移動！要重來嗎？")) { this.initGame(); }
-                }
-            }
-        }
+            def merge(self, line):
+                # 核心合併演算法
+                n = [v for v in line if v != 0] # 先用清單把這一排所有的 0 拿掉，讓數字全部擠在一起
+                res = [] # 準備裝合併後的新整排數字
+                i = 0
+                
+                # 【為什麼用 while 迴圈？】
+                # 因為只要前面跟後面合併成功，下一格就會被消耗掉，我們必須「動態跳過下一格（i += 2）」。
+                # 這種每一步要走多遠不固定的情況，在 Python 裡必須使用 while 迴圈。
+                while i < len(n):
+                    if i < len(n) - 1:
+                        # 【滿足要求】：用 if 檢查有沒有踩到萬能方塊 X 的合併規則
+                        cond1 = (n[i] == 'X' and isinstance(n[i+1], int)) # 第一格是 X，第二格是普通數字
+                        cond2 = (n[i+1] == 'X' and isinstance(n[i], int)) # 第二格是 X，第一格是普通數字
+                        cond3 = (n[i] == n[i+1] and n[i] != 'X') # 兩格數字一模一樣，且都不是 X
+                        
+                        if cond1 or cond2 or cond3:
+                            # 只要滿足上面其中一個條件，就代表兩格可以合併！
+                            # 如果其中一個是 X，就拿另一個普通的數字乘兩倍；如果一樣，就直接乘兩倍
+                            val = (n[i+1] if n[i] == 'X' else n[i]) * 2
+                            res.append(val) # 放進結果清單
+                            self.score += val # 幫玩家把加出來的數字加進總分
+                            i += 2 # 【超重要】因為兩格合體了，下一個數字已經被用掉，迴圈指標直接跨 2 步跳過它
+                            continue
+                    res.append(n[i]) # 如果沒發生合併，就直接把數字放進結果
+                    i += 1 # 指標正常往前走 1 步
+                return res
 
-        const g = new Game2048();
-        window.addEventListener('keydown', e => { if(e.key.includes('Arrow')) g.move(e.key.replace('Arrow','').toUpperCase()); });
-        let tx, ty;
-        window.addEventListener('touchstart', e => { tx=e.touches[0].clientX; ty=e.touches[0].clientY; });
-        window.addEventListener('touchend', e => {
-            let dx = e.changedTouches[0].clientX-tx, dy = e.changedTouches[0].clientY-ty;
-            if(Math.abs(dx)>30 || Math.abs(dy)>30) {
-                if(Math.abs(dx)>Math.abs(dy)) g.move(dx>0?'RIGHT':'LEFT');
-                else g.move(dy>0?'DOWN':'UP');
-            }
-        });
+            def check_game_state(self):
+                # 這個功能負責檢查「達成2048」以及「卡死（輸了）」的狀態
+                max_val = 0 # 紀錄場面上最大的數字
+                can_move = False # 先預設大家已經不能動了
+                
+                # 用巢狀 for 迴圈全面掃描 5x5 地圖
+                for r in range(self.size):
+                    for c in range(self.size):
+                        v = self.grid[r][c]
+                        if isinstance(v, int):
+                            max_val = max(max_val, v) # 找出格子裡的最大數字
+                        
+                        # 只要還有任何一個空格(0)，就代表還能動
+                        if v == 0:
+                            can_move = True
+                        # 檢查左右鄰居：如果隔壁格子跟自己一樣，或者其中一個是 X，代表還能滑動合併
+                        if c < 4:
+                            if self.grid[r][c] == self.grid[r][c+1] or self.grid[r][c] == 'X' or self.grid[r][c+1] == 'X':
+                                can_move = True
+                        # 檢查上下鄰居：如果上下格子跟自己一樣，或者其中一個是 X，代表還能滑動合併
+                        if r < 4:
+                            if self.grid[r][c] == self.grid[r+1][c] or self.grid[r][c] == 'X' or self.grid[r+1][c] == 'X':
+                                can_move = True
+
+                # 【滿足要求】：當最高分達到 2048，而且之前還沒跳過中獎通知時
+                if max_val >= 2048 and not self.has_won:
+                    self.has_won = True # 標記已經贏了，避免重複彈窗
+                    # 使用 window.confirm 做出一個有「確定」跟「取消」的對話框
+                    if window.confirm("達成 2048！要繼續遊玩嗎？ (取消則重來)"):
+                        pass # 按確定，就什麼都不做，讓玩家繼續挑戰更高分
+                    else:
+                        self.init_game() # 按取消，就直接洗牌重新開始
+
+                # 【滿足要求】：全盤皆滿且完全無法進行任何方向的移動（死局）
+                if not can_move:
+                    self.is_game_active = False # 把遊戲開關關掉，凍結畫面
+                    if self.idle_timer_id:
+                        timer.clear_timeout(self.idle_timer_id) # 既然都死局了，就把 10 秒自動重來計時器關掉
+                    
+                    if window.confirm("無法繼續移動！要重來嗎？"):
+                        self.init_game() # 如果點選「是」，就重設地圖回到起始樣子
+                    # 如果點選「否」，因為 self.is_game_active 已經是 False 了，
+                    # 接下來不管按鍵盤還是滑手機都不會有任何動作，遊戲就會完全卡在那邊供人觀賞。
+
+        # 這裡就是把上面設計好的藍圖，真正組裝出一台「遊戲機台」來玩
+        g = Game2048()
+
+        # 監聽電腦的實體鍵盤事件
+        @bind(window, "keydown")
+        def keydown(e):
+            if "Arrow" in e.key:
+                direction = e.key.replace("Arrow", "").upper() # 把 ArrowUp 變成 UP
+                g.move(direction) # 呼叫機台的移動功能
+
+        # 【手機能玩的核心】：綁定手機螢幕觸控滑動事件
+        tx, ty = 0, 0
+        @bind(window, "touchstart")
+        def touchstart(e):
+            global tx, ty
+            tx = e.touches[0].clientX # 記錄手指剛碰觸螢幕時的 X 座標
+            ty = e.touches[0].clientY # 記錄手指剛碰觸螢幕時的 Y 座標
+
+        @bind(window, "touchend")
+        def touchend(e):
+            # 計算手指放開時，跟剛碰觸時的距離差（位移量）
+            dx = e.changedTouches[0].clientX - tx
+            dy = e.changedTouches[0].clientY - ty
+            
+            # 確保滑動的距離大於 30 像素，防止只是輕輕點一下就誤判成移動
+            if abs(dx) > 30 or abs(dy) > 30:
+                # 比較橫向移動大還是縱向移動大
+                if abs(dx) > abs(dy):
+                    g.move('RIGHT' if dx > 0 else 'LEFT') # 橫向大：往右滑或往左滑
+                else:
+                    g.move('DOWN' if dy > 0 else 'UP') # 縱向大：往下滑或往上滑
     </script>
 </body>
 </html>
